@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChannelNode</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+      <div class="auth-shell">
+        <div class="brand auth-brand">
+          <div class="brand-mark">CN</div>
+          <div>
+            <h1>ChannelNode</h1>
+            <p>Creator Workspace</p>
+          </div>
+        </div>
+        <div class="auth-panel">
+          <p class="eyebrow">YouTube planning</p>
+          <h2 id="authTitle">Sign in to your workspace</h2>
+          <p class="auth-copy">Collect ideas, scripts, research, and publishing notes in one focused place.</p>
+          <form class="auth-actions" id="authLoginForm">
+            <label>
+              Email account
+              <input name="email" type="text" inputmode="email" placeholder="you@example.com" autocomplete="username" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" placeholder="Enter password" autocomplete="current-password" required />
+            </label>
+            <p class="auth-error" id="authError" role="alert" hidden>Email or password is incorrect.</p>
+            <button class="primary-button" type="submit">Log in</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <div class="app-shell" id="appShell" hidden>
+      <aside class="sidebar" aria-label="Channel workspace">
+        <div class="brand">
+          <div class="brand-mark">CN</div>
+          <div>
+            <h1>ChannelNode</h1>
+            <p id="channelName">Creator Workspace</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Workspace views">
+          <button class="nav-item active" data-view="board" type="button">
+            <span aria-hidden="true">▦</span>
+            Board
+          </button>
+          <button class="nav-item" data-view="map" type="button">
+            <span aria-hidden="true">⌁</span>
+            Idea Map
+          </button>
+          <button class="nav-item" data-view="calendar" type="button">
+            <span aria-hidden="true">◷</span>
+            Calendar
+          </button>
+          <button class="nav-item" data-view="research" type="button">
+            <span aria-hidden="true">◎</span>
+            Research
+          </button>
+          <button class="nav-item" data-view="settings" type="button">
+            <span aria-hidden="true">⚙</span>
+            Settings
+          </button>
+        </nav>
+
+        <section class="side-panel" aria-labelledby="momentumTitle">
+          <div class="section-heading">
+            <h2 id="momentumTitle">Momentum</h2>
+          </div>
+          <div class="metric-list">
+            <div>
+              <strong id="ideasCount">0</strong>
+              <span>Ideas</span>
+            </div>
+            <div>
+              <strong id="readyCount">0</strong>
+              <span>Ready</span>
+            </div>
+            <div>
+              <strong id="taskCount">0</strong>
+              <span>Open Tasks</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="side-panel" aria-labelledby="tagsTitle">
+          <div class="section-heading">
+            <h2 id="tagsTitle">Tags</h2>
+          </div>
+          <div class="tag-cloud" id="tagCloud"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="page-heading">
+            <div class="page-icon" id="viewIcon" aria-hidden="true">▦</div>
+            <p class="eyebrow">YouTube planning</p>
+            <h2 id="viewTitle">Board</h2>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="searchInput" type="search" placeholder="Search ideas, notes, tags" />
+            </label>
+            <select id="formatFilter" aria-label="Filter by format">
+              <option value="all">All formats</option>
+              <option value="Longform">Longform</option>
+              <option value="Short">Short</option>
+              <option value="Livestream">Livestream</option>
+              <option value="Community">Community</option>
+            </select>
+            <button class="icon-button" id="exportButton" type="button" title="Export ideas" aria-label="Export ideas">⇩</button>
+            <button class="primary-button" id="newIdeaButton" type="button">
+              <span aria-hidden="true">+</span>
+              New idea
+            </button>
+            <div class="account-area" id="accountArea">
+              <button class="login-button" id="loginButton" type="button">Edit profile</button>
+              <div class="account-menu-wrap" id="accountMenuWrap" hidden>
+                <button class="account-button" id="accountButton" type="button" aria-haspopup="menu" aria-expanded="false">
+                  <span class="avatar" id="accountAvatar">CN</span>
+                  <span class="account-copy">
+                    <strong id="accountName">Creator</strong>
+                    <span id="accountEmail">Local workspace</span>
+                  </span>
+                  <span class="chevron" aria-hidden="true">⌄</span>
+                </button>
+                <div class="account-menu" id="accountMenu" role="menu" hidden>
+                  <div class="menu-profile">
+                    <span class="avatar" id="menuAvatar">CN</span>
+                    <div>
+                      <strong id="menuName">Creator</strong>
+                      <span id="menuEmail">Local workspace</span>
+                    </div>
+                  </div>
+                  <div class="menu-meta">
+                    <span>Workspace</span>
+                    <strong id="menuChannel">Creator Workspace</strong>
+                  </div>
+                  <button id="editProfileButton" role="menuitem" type="button">Account settings</button>
+                  <button id="signOutButton" role="menuitem" type="button">Sign out</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="composer" id="composer" aria-label="New idea form" hidden>
+          <form id="ideaForm">
+            <div class="form-grid">
+              <label>
+                Title
+                <input name="title" type="text" placeholder="Video idea" required />
+              </label>
+              <label>
+                Format
+                <select name="format">
+                  <option>Longform</option>
+                  <option>Short</option>
+                  <option>Livestream</option>
+                  <option>Community</option>
+                </select>
+              </label>
+              <label>
+                Stage
+                <select name="stage">
+                  <option>Seed</option>
+                  <option>Outline</option>
+                  <option>Script</option>
+                  <option>Shoot</option>
+                  <option>Edit</option>
+                  <option>Published</option>
+                </select>
+              </label>
+              <label>
+                Publish date
+                <input name="date" type="date" />
+              </label>
+              <label class="wide">
+                Hook
+                <input name="hook" type="text" placeholder="Why someone clicks" />
+              </label>
+              <label class="wide">
+                Notes
+                <textarea name="notes" placeholder="Angle, examples, sponsor notes, shots, references"></textarea>
+              </label>
+              <label>
+                Tags
+                <input name="tags" type="text" placeholder="ai, tutorial, setup" />
+              </label>
+              <label>
+                Tasks
+                <input name="tasks" type="text" placeholder="Outline; record A-roll; thumbnail" />
+              </label>
+            </div>
+            <div class="form-actions">
+              <button class="ghost-button" id="cancelIdeaButton" type="button">Cancel</button>
+              <button class="primary-button" type="submit">Add idea</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="view active" id="boardView" aria-label="Idea board">
+          <div class="board" id="board"></div>
+        </section>
+
+        <section class="view" id="mapView" aria-label="Idea map">
+          <div class="map-layout">
+            <div class="map-surface">
+              <canvas id="ideaMap" width="1280" height="720"></canvas>
+            </div>
+            <aside class="detail-panel" id="mapDetail">
+              <p class="eyebrow">Selected node</p>
+              <h3>Pick an idea</h3>
+              <p class="muted">The map connects ideas that share tags, formats, or publishing windows.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="calendarView" aria-label="Publishing calendar">
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
+
+        <section class="view" id="researchView" aria-label="Research library">
+          <div class="research-layout">
+            <form class="research-form" id="researchForm">
+              <label>
+                Source title
+                <input name="title" type="text" placeholder="Reference, competitor video, article" required />
+              </label>
+              <label>
+                Link
+                <input name="url" type="url" placeholder="https://..." />
+              </label>
+              <label>
+                Notes
+                <textarea name="notes" placeholder="Useful stats, angle, quote, timestamp"></textarea>
+              </label>
+              <button class="primary-button" type="submit">Add source</button>
+            </form>
+            <div class="research-list" id="researchList"></div>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView" aria-label="Account settings">
+          <div class="settings-layout">
+            <form class="settings-card" id="settingsForm">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h3>Profile settings</h3>
+                <p class="muted">Change the name and photo shown across your ChannelNode workspace.</p>
+              </div>
+
+              <div class="photo-row">
+                <div class="settings-avatar" id="settingsAvatarPreview">SA</div>
+                <div class="photo-actions">
+                  <label class="upload-button" for="photoInput">Choose photo</label>
+                  <input id="photoInput" name="photo" type="file" accept="image/*" />
+                  <button class="ghost-button" id="removePhotoButton" type="button">Remove photo</button>
+                </div>
+              </div>
+
+              <label>
+                Display name
+                <input id="settingsName" name="name" type="text" placeholder="Your name" required />
+              </label>
+              <label>
+                Email account
+                <input id="settingsEmail" name="email" type="text" readonly />
+              </label>
+              <label>
+                Workspace name
+                <input id="settingsChannel" name="channel" type="text" placeholder="Creator Workspace" />
+              </label>
+              <div class="form-actions">
+                <button class="primary-button" type="submit">Save settings</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector" id="inspector" aria-label="Idea details">
+        <button class="icon-button close-inspector" id="closeInspectorButton" type="button" aria-label="Close details">×</button>
+        <div id="inspectorContent"></div>
+      </aside>
+    </div>
+
+    <div class="modal-backdrop" id="loginModal" hidden>
+      <section class="login-modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <button class="icon-button modal-close" id="closeLoginButton" type="button" aria-label="Close login">×</button>
+        <p class="eyebrow">Account</p>
+        <h2 id="loginTitle">Workspace login</h2>
+        <p class="auth-copy">Save a local profile for this workspace.</p>
+        <form id="loginForm">
+          <label>
+            Name
+            <input name="name" type="text" placeholder="Your name" autocomplete="name" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="text" inputmode="email" placeholder="you@example.com" autocomplete="email" required />
+          </label>
+          <label>
+            Channel
+            <input name="channel" type="text" placeholder="Channel name" />
+          </label>
+          <div class="form-actions">
+            <button class="ghost-button" id="cancelLoginButton" type="button">Cancel</button>
+            <button class="primary-button" type="submit">Continue</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
