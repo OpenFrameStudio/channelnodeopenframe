@@ -2,7 +2,8 @@ const stages = ["Seed", "Outline", "Script", "Shoot", "Edit", "Published"];
 
 const loginAccount = {
   email: "shuhangao7@gmail.com",
-  password: "channelnode-demo",
+  passwordSalt: "channelnode-openframe-studio",
+  passwordHash: "14c92566bfccd84d0d7cbf2369b2c8428eadb49bb7a9859f75a3858b12813de9",
   name: "Shuhang Ao",
   channel: "Creator Workspace",
 };
@@ -280,13 +281,13 @@ function bindEvents() {
 
   els.loginButton.addEventListener("click", openLoginModal);
 
-  els.authLoginForm.addEventListener("submit", (event) => {
+  els.authLoginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(els.authLoginForm);
     const email = form.get("email").trim().toLowerCase();
     const password = form.get("password");
     const allowed =
-      email === loginAccount.email.toLowerCase() && password === loginAccount.password;
+      email === loginAccount.email.toLowerCase() && (await verifyPassword(password));
 
     if (!allowed) {
       els.authError.hidden = false;
@@ -442,6 +443,16 @@ function bindEvents() {
     els.researchForm.reset();
     renderResearch();
   });
+}
+
+async function verifyPassword(password) {
+  if (!crypto.subtle) return false;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${loginAccount.passwordSalt}:${password}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("") === loginAccount.passwordHash;
 }
 
 function splitList(value) {
