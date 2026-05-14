@@ -46,6 +46,24 @@
           </div>
         </div>
 
+        <section class="workspace-switcher" aria-label="Workspaces">
+          <button class="workspace-button" id="workspaceButton" type="button" aria-haspopup="menu" aria-expanded="false">
+            <span class="workspace-dot" aria-hidden="true">W</span>
+            <span class="workspace-copy">
+              <span>Workspace</span>
+              <strong id="workspaceName">Creator Workspace</strong>
+            </span>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="workspace-menu" id="workspaceMenu" role="menu" hidden>
+            <div class="workspace-list" id="workspaceList"></div>
+            <form class="workspace-form" id="workspaceForm">
+              <input name="name" type="text" placeholder="New workspace" aria-label="New workspace name" required />
+              <button class="icon-button" type="submit" title="Create workspace" aria-label="Create workspace">+</button>
+            </form>
+          </div>
+        </section>
+
         <nav class="nav-list" aria-label="Workspace views">
           <button class="nav-item active" data-view="board" type="button">
             <span aria-hidden="true">▦</span>
