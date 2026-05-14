@@ -1,4 +1,5 @@
 const stages = ["Seed", "Outline", "Script", "Shoot", "Edit", "Published"];
+const storageKey = "channelNodeState";
 
 const loginAccount = {
   email: "shuhangao7@gmail.com",
@@ -9,6 +10,8 @@ const loginAccount = {
 };
 
 const state = {
+  workspaces: [],
+  activeWorkspaceId: "",
   ideas: [],
   research: [],
   selectedIdeaId: null,
@@ -126,6 +129,11 @@ const els = {
   cancelIdea: document.querySelector("#cancelIdeaButton"),
   exportButton: document.querySelector("#exportButton"),
   channelName: document.querySelector("#channelName"),
+  workspaceButton: document.querySelector("#workspaceButton"),
+  workspaceMenu: document.querySelector("#workspaceMenu"),
+  workspaceName: document.querySelector("#workspaceName"),
+  workspaceList: document.querySelector("#workspaceList"),
+  workspaceForm: document.querySelector("#workspaceForm"),
   viewIcon: document.querySelector("#viewIcon"),
   viewTitle: document.querySelector("#viewTitle"),
   navItems: document.querySelectorAll(".nav-item"),
@@ -181,45 +189,123 @@ function nextDate(days) {
 }
 
 function loadState() {
-  const saved = localStorage.getItem("channelNodeState");
+  const saved = localStorage.getItem(storageKey);
   if (!saved) {
-    state.ideas = starterIdeas;
-    state.research = starterResearch;
+    const workspace = createWorkspace(loginAccount.channel, {
+      ideas: cloneItems(starterIdeas),
+      research: cloneItems(starterResearch),
+    });
+    state.workspaces = [workspace];
+    activateWorkspace(workspace.id);
     saveState();
     return;
   }
 
   try {
     const parsed = JSON.parse(saved);
-    state.ideas = Array.isArray(parsed.ideas) ? parsed.ideas : starterIdeas;
-    state.research = Array.isArray(parsed.research) ? parsed.research : starterResearch;
     state.accountProfile = {
       name: parsed.accountProfile?.name || parsed.user?.name || loginAccount.name,
       channel: parsed.accountProfile?.channel || parsed.user?.channel || loginAccount.channel,
       photo: parsed.accountProfile?.photo || parsed.user?.photo || "",
     };
+    state.workspaces = normalizeWorkspaces(parsed);
+    state.activeWorkspaceId = state.workspaces.some((workspace) => workspace.id === parsed.activeWorkspaceId)
+      ? parsed.activeWorkspaceId
+      : state.workspaces[0].id;
+    activateWorkspace(state.activeWorkspaceId);
     const parsedUser = parsed.user && typeof parsed.user === "object" ? parsed.user : null;
     state.user =
       parsedUser && parsedUser.email?.toLowerCase() === loginAccount.email.toLowerCase()
         ? { ...parsedUser, ...state.accountProfile, email: loginAccount.email, provider: "Email" }
         : null;
   } catch {
-    state.ideas = starterIdeas;
-    state.research = starterResearch;
+    const workspace = createWorkspace(loginAccount.channel, {
+      ideas: cloneItems(starterIdeas),
+      research: cloneItems(starterResearch),
+    });
+    state.workspaces = [workspace];
+    activateWorkspace(workspace.id);
     state.user = null;
   }
 }
 
 function saveState() {
+  syncActiveWorkspace();
   localStorage.setItem(
-    "channelNodeState",
+    storageKey,
     JSON.stringify({
-      ideas: state.ideas,
-      research: state.research,
+      activeWorkspaceId: state.activeWorkspaceId,
+      workspaces: state.workspaces,
       user: state.user,
       accountProfile: state.accountProfile,
     }),
   );
+}
+
+function normalizeWorkspaces(parsed) {
+  if (Array.isArray(parsed.workspaces) && parsed.workspaces.length) {
+    return parsed.workspaces.map((workspace) =>
+      createWorkspace(workspace.name, {
+        id: workspace.id,
+        ideas: Array.isArray(workspace.ideas) ? workspace.ideas : [],
+        research: Array.isArray(workspace.research) ? workspace.research : [],
+        createdAt: workspace.createdAt,
+        updatedAt: workspace.updatedAt,
+      }),
+    );
+  }
+
+  return [
+    createWorkspace(parsed.accountProfile?.channel || parsed.user?.channel || loginAccount.channel, {
+      ideas: Array.isArray(parsed.ideas) ? parsed.ideas : cloneItems(starterIdeas),
+      research: Array.isArray(parsed.research) ? parsed.research : cloneItems(starterResearch),
+    }),
+  ];
+}
+
+function createWorkspace(name, overrides = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: overrides.id || crypto.randomUUID(),
+    name: cleanWorkspaceName(name),
+    ideas: Array.isArray(overrides.ideas) ? overrides.ideas : [],
+    research: Array.isArray(overrides.research) ? overrides.research : [],
+    createdAt: overrides.createdAt || now,
+    updatedAt: overrides.updatedAt || now,
+  };
+}
+
+function cloneItems(items) {
+  return JSON.parse(JSON.stringify(items));
+}
+
+function cleanWorkspaceName(name) {
+  return String(name || "").trim() || "Untitled workspace";
+}
+
+function activeWorkspace() {
+  return state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) || state.workspaces[0];
+}
+
+function activateWorkspace(id) {
+  const workspace = state.workspaces.find((item) => item.id === id) || state.workspaces[0];
+  if (!workspace) return;
+  state.activeWorkspaceId = workspace.id;
+  state.ideas = workspace.ideas;
+  state.research = workspace.research;
+  state.accountProfile.channel = workspace.name;
+  if (state.user) {
+    state.user = { ...state.user, channel: workspace.name };
+  }
+}
+
+function syncActiveWorkspace() {
+  const workspace = activeWorkspace();
+  if (!workspace) return;
+  workspace.name = cleanWorkspaceName(state.accountProfile.channel || workspace.name);
+  workspace.ideas = state.ideas;
+  workspace.research = state.research;
+  workspace.updatedAt = new Date().toISOString();
 }
 
 function bindEvents() {
@@ -271,6 +357,18 @@ function bindEvents() {
 
   els.navItems.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
+  });
+
+  els.workspaceButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleWorkspaceMenu();
+  });
+
+  els.workspaceForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(els.workspaceForm);
+    addWorkspace(form.get("name"));
+    els.workspaceForm.reset();
   });
 
   els.closeInspector.addEventListener("click", () => {
@@ -384,6 +482,10 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    if (!event.target.closest?.(".workspace-switcher")) {
+      closeWorkspaceMenu();
+    }
+
     if (!els.accountMenuWrap.contains(event.target)) {
       closeAccountMenu();
     }
@@ -397,6 +499,7 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    closeWorkspaceMenu();
     closeAccountMenu();
     closeLoginModal();
     els.inspector.classList.remove("open");
@@ -505,6 +608,7 @@ function filteredIdeas() {
 
 function render() {
   renderAuth();
+  renderWorkspaces();
   renderBoard();
   renderStats();
   renderTagCloud();
@@ -559,6 +663,108 @@ function openLoginModal() {
 
 function closeLoginModal() {
   els.loginModal.hidden = true;
+}
+
+function toggleWorkspaceMenu() {
+  const expanded = els.workspaceButton.getAttribute("aria-expanded") === "true";
+  els.workspaceMenu.hidden = expanded;
+  els.workspaceButton.setAttribute("aria-expanded", String(!expanded));
+}
+
+function closeWorkspaceMenu() {
+  els.workspaceMenu.hidden = true;
+  els.workspaceButton.setAttribute("aria-expanded", "false");
+}
+
+function renderWorkspaces() {
+  const workspace = activeWorkspace();
+  if (!workspace) return;
+  els.workspaceName.textContent = workspace.name;
+  els.workspaceList.innerHTML = state.workspaces
+    .map((item) => {
+      const selected = item.id === state.activeWorkspaceId;
+      const ideaCount = item.ideas.length;
+      return `
+        <div class="workspace-option-row ${selected ? "active" : ""}">
+          <button class="workspace-option" data-workspace-id="${item.id}" type="button" role="menuitem">
+            <span class="workspace-dot" aria-hidden="true">${escapeHtml(getWorkspaceInitial(item.name))}</span>
+            <span>
+              <strong>${escapeHtml(item.name)}</strong>
+              <small>${ideaCount} ${ideaCount === 1 ? "idea" : "ideas"}</small>
+            </span>
+          </button>
+          <button class="workspace-remove" data-delete-workspace="${item.id}" type="button" aria-label="Delete ${escapeHtml(item.name)}" ${state.workspaces.length === 1 ? "disabled" : ""}>×</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  els.workspaceList.querySelectorAll("[data-workspace-id]").forEach((button) => {
+    button.addEventListener("click", () => switchWorkspace(button.dataset.workspaceId));
+  });
+
+  els.workspaceList.querySelectorAll("[data-delete-workspace]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteWorkspace(button.dataset.deleteWorkspace);
+    });
+  });
+}
+
+function switchWorkspace(id) {
+  if (id === state.activeWorkspaceId) {
+    closeWorkspaceMenu();
+    return;
+  }
+  syncActiveWorkspace();
+  activateWorkspace(id);
+  state.selectedIdeaId = null;
+  state.search = "";
+  state.format = "all";
+  els.search.value = "";
+  els.format.value = "all";
+  els.composer.hidden = true;
+  els.inspector.classList.remove("open");
+  closeWorkspaceMenu();
+  saveState();
+  render();
+}
+
+function addWorkspace(name) {
+  syncActiveWorkspace();
+  const workspace = createWorkspace(name);
+  state.workspaces.push(workspace);
+  activateWorkspace(workspace.id);
+  state.selectedIdeaId = null;
+  state.search = "";
+  state.format = "all";
+  els.search.value = "";
+  els.format.value = "all";
+  els.composer.hidden = true;
+  els.inspector.classList.remove("open");
+  closeWorkspaceMenu();
+  saveState();
+  render();
+}
+
+function deleteWorkspace(id) {
+  if (state.workspaces.length <= 1) return;
+  const workspace = state.workspaces.find((item) => item.id === id);
+  if (!workspace) return;
+  if (!window.confirm(`Delete "${workspace.name}" and its ideas from this browser?`)) return;
+
+  state.workspaces = state.workspaces.filter((item) => item.id !== id);
+  if (state.activeWorkspaceId === id) {
+    activateWorkspace(state.workspaces[0].id);
+    state.selectedIdeaId = null;
+    els.inspector.classList.remove("open");
+  }
+  saveState();
+  render();
+}
+
+function getWorkspaceInitial(name) {
+  return cleanWorkspaceName(name).slice(0, 1).toUpperCase();
 }
 
 function toggleAccountMenu() {
