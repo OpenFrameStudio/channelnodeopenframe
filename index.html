@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChannelNode</title>
-    <link rel="stylesheet" href="styles.css?v=workspaces-1" />
+    <link rel="stylesheet" href="styles.css?v=connected-1" />
   </head>
   <body>
     <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -170,6 +170,8 @@
           </div>
         </header>
 
+        <section class="connection-strip" id="connectionStrip" aria-label="Workspace connections"></section>
+
         <section class="composer" id="composer" aria-label="New idea form" hidden>
           <form id="ideaForm">
             <div class="form-grid">
@@ -252,6 +254,12 @@
               <label>
                 Source title
                 <input name="title" type="text" placeholder="Reference, competitor video, article" required />
+              </label>
+              <label>
+                Related idea
+                <select id="researchIdeaSelect" name="ideaId">
+                  <option value="">Workspace note</option>
+                </select>
               </label>
               <label>
                 Link
@@ -338,6 +346,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=workspaces-1"></script>
+    <script src="app.js?v=connected-1"></script>
   </body>
 </html>
