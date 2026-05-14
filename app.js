@@ -142,6 +142,7 @@ const els = {
   readyCount: document.querySelector("#readyCount"),
   taskCount: document.querySelector("#taskCount"),
   tagCloud: document.querySelector("#tagCloud"),
+  connectionStrip: document.querySelector("#connectionStrip"),
   inspector: document.querySelector("#inspector"),
   inspectorContent: document.querySelector("#inspectorContent"),
   closeInspector: document.querySelector("#closeInspectorButton"),
@@ -149,6 +150,7 @@ const els = {
   mapDetail: document.querySelector("#mapDetail"),
   calendar: document.querySelector("#calendarGrid"),
   researchForm: document.querySelector("#researchForm"),
+  researchIdeaSelect: document.querySelector("#researchIdeaSelect"),
   researchList: document.querySelector("#researchList"),
   authLoginForm: document.querySelector("#authLoginForm"),
   authError: document.querySelector("#authError"),
@@ -539,6 +541,7 @@ function bindEvents() {
     state.research.unshift({
       id: crypto.randomUUID(),
       title: form.get("title").trim(),
+      ideaId: form.get("ideaId"),
       url: form.get("url").trim(),
       notes: form.get("notes").trim(),
     });
@@ -593,6 +596,7 @@ function switchView(view) {
   if (view === "settings") {
     renderSettings();
   }
+  renderConnectionStrip();
 }
 
 function filteredIdeas() {
@@ -609,6 +613,7 @@ function filteredIdeas() {
 function render() {
   renderAuth();
   renderWorkspaces();
+  renderConnectionStrip();
   renderBoard();
   renderStats();
   renderTagCloud();
@@ -663,6 +668,55 @@ function openLoginModal() {
 
 function closeLoginModal() {
   els.loginModal.hidden = true;
+}
+
+function renderConnectionStrip() {
+  const activeIdea = state.ideas.find((idea) => idea.id === state.selectedIdeaId);
+  const nextIdea = getNextIdea();
+  const relatedSources = activeIdea ? getLinkedResearch(activeIdea.id).length : 0;
+  const linkedSources = state.research.filter((item) => item.ideaId).length;
+  const sourceLabel = linkedSources === 1 ? "source linked to ideas" : "sources linked to ideas";
+
+  els.connectionStrip.innerHTML = `
+    <button class="connection-card ${state.activeView === "board" ? "active" : ""}" data-connection-view="board" type="button">
+      <span>Current thread</span>
+      <strong>${escapeHtml(activeIdea?.title || `${state.ideas.length} ideas on the board`)}</strong>
+      <small>${activeIdea ? `${activeIdea.stage} · ${relatedSources} linked ${relatedSources === 1 ? "source" : "sources"}` : "Pick any idea to follow it across tabs"}</small>
+    </button>
+    <button class="connection-card ${state.activeView === "calendar" ? "active" : ""}" data-connection-view="calendar" type="button">
+      <span>Next publish</span>
+      <strong>${escapeHtml(nextIdea?.title || "No dates yet")}</strong>
+      <small>${nextIdea ? `${formatShortDate(nextIdea.date)} · ${nextIdea.stage}` : "Add dates to see the calendar connect"}</small>
+    </button>
+    <button class="connection-card ${state.activeView === "research" ? "active" : ""}" data-connection-view="research" type="button">
+      <span>Research bank</span>
+      <strong>${state.research.length} ${state.research.length === 1 ? "source" : "sources"}</strong>
+      <small>${linkedSources} ${sourceLabel}</small>
+    </button>
+    <button class="connection-card ${state.activeView === "map" ? "active" : ""}" data-connection-view="map" type="button">
+      <span>Idea map</span>
+      <strong>${getConnectedIdeaCount()} connected ideas</strong>
+      <small>Connections use tags, formats, and publish timing</small>
+    </button>
+  `;
+
+  els.connectionStrip.querySelectorAll("[data-connection-view]").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.connectionView));
+  });
+}
+
+function getNextIdea() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return state.ideas
+    .filter((idea) => idea.date && new Date(`${idea.date}T12:00:00`) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+}
+
+function getConnectedIdeaCount() {
+  return state.ideas.filter((idea) =>
+    state.ideas.some((other) => other.id !== idea.id && getIdeaRelationship(idea, other)),
+  ).length;
 }
 
 function toggleWorkspaceMenu() {
@@ -850,6 +904,9 @@ function renderCard(idea) {
   const total = idea.tasks.length;
   const progress = total ? Math.round((done / total) * 100) : 0;
   const score = getIdeaScore(idea);
+  const sourceCount = getLinkedResearch(idea.id).length;
+  const dateText = idea.date ? ` · ${formatShortDate(idea.date)}` : "";
+  const sourceText = sourceCount ? ` · ${sourceCount} ${sourceCount === 1 ? "source" : "sources"}` : "";
   return `
     <article class="idea-card" draggable="true" data-id="${idea.id}">
       <div class="card-top">
@@ -863,7 +920,7 @@ function renderCard(idea) {
       </div>
       <div class="task-progress" aria-label="Task progress">
         <div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>
-        <span>${done}/${total || 0} tasks${idea.date ? ` · ${formatShortDate(idea.date)}` : ""}</span>
+        <span>${done}/${total || 0} tasks${dateText}${sourceText}</span>
       </div>
     </article>
   `;
@@ -892,6 +949,10 @@ function renderTagCloud() {
     : `<span class="muted">No tags yet.</span>`;
 }
 
+function getLinkedResearch(ideaId) {
+  return state.research.filter((item) => item.ideaId === ideaId);
+}
+
 function openInspector(id) {
   state.selectedIdeaId = id;
   const idea = state.ideas.find((item) => item.id === id);
@@ -899,9 +960,11 @@ function openInspector(id) {
   els.inspectorContent.innerHTML = renderInspector(idea);
   els.inspector.classList.add("open");
   bindInspector(idea);
+  renderConnectionStrip();
 }
 
 function renderInspector(idea) {
+  const linkedResearch = getLinkedResearch(idea.id);
   const tasks = idea.tasks.length
     ? idea.tasks
         .map(
@@ -914,6 +977,18 @@ function renderInspector(idea) {
         )
         .join("")
     : `<p class="muted">No tasks yet.</p>`;
+  const sources = linkedResearch.length
+    ? linkedResearch
+        .map(
+          (item) => `
+          <button class="linked-source" data-open-source="${item.id}" type="button">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.notes || item.url || "Research note")}</span>
+          </button>
+        `,
+        )
+        .join("")
+    : `<p class="muted">No research is linked to this idea yet.</p>`;
 
   return `
     <p class="eyebrow">${idea.format}</p>
@@ -939,6 +1014,11 @@ function renderInspector(idea) {
     <div class="inspector-block">
       <h3>Notes</h3>
       <textarea id="detailNotes">${escapeHtml(idea.notes || "")}</textarea>
+    </div>
+    <div class="inspector-block">
+      <h3>Related research</h3>
+      <div class="linked-source-list">${sources}</div>
+      <button class="ghost-button" id="addResearchForIdea" type="button">Link research</button>
     </div>
     <div class="inspector-block">
       <h3>Tags</h3>
@@ -975,6 +1055,22 @@ function bindInspector(idea) {
     saveState();
     render();
     openInspector(idea.id);
+  });
+
+  els.inspectorContent.querySelectorAll("[data-open-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      switchView("research");
+      closeWorkspaceMenu();
+      document
+        .querySelector(`[data-research-card="${button.dataset.openSource}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
+
+  els.inspectorContent.querySelector("#addResearchForIdea").addEventListener("click", () => {
+    switchView("research");
+    els.researchIdeaSelect.value = idea.id;
+    els.researchForm.elements.title.focus();
   });
 
   els.inspectorContent.querySelector("#saveIdeaButton").addEventListener("click", () => {
@@ -1130,6 +1226,7 @@ function resizeMapCanvas(canvas, ctx) {
 function renderMapDetail(idea) {
   const doneTasks = idea.tasks.filter((task) => task.done).length;
   const taskLabel = idea.tasks.length ? `${doneTasks}/${idea.tasks.length} done` : "No tasks";
+  const sourceCount = getLinkedResearch(idea.id).length;
   els.mapDetail.innerHTML = `
     <p class="eyebrow">${idea.stage} · ${idea.format}</p>
     <h3>${escapeHtml(idea.title)}</h3>
@@ -1146,6 +1243,10 @@ function renderMapDetail(idea) {
       <div>
         <span>Publish</span>
         <strong>${idea.date ? formatShortDate(idea.date) : "Unscheduled"}</strong>
+      </div>
+      <div>
+        <span>Sources</span>
+        <strong>${sourceCount}</strong>
       </div>
     </div>
     <div class="card-meta">
@@ -1206,26 +1307,43 @@ function renderCalendar() {
 }
 
 function renderResearch() {
+  els.researchIdeaSelect.innerHTML = `
+    <option value="">Workspace note</option>
+    ${state.ideas.map((idea) => `<option value="${idea.id}">${escapeHtml(idea.title)}</option>`).join("")}
+  `;
+
   els.researchList.innerHTML = state.research.length
     ? state.research
-        .map(
-          (item) => `
-        <article class="research-item">
+        .map((item) => {
+          const relatedIdea = state.ideas.find((idea) => idea.id === item.ideaId);
+          return `
+        <article class="research-item" data-research-card="${item.id}">
           <h3>${escapeHtml(item.title)}</h3>
+          <div class="research-link-row">
+            ${
+              relatedIdea
+                ? `<button class="link-pill" data-open-idea="${relatedIdea.id}" type="button">Linked to ${escapeHtml(relatedIdea.title)}</button>`
+                : `<span class="link-pill muted-pill">Workspace note</span>`
+            }
+          </div>
           ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>` : ""}
           <p>${escapeHtml(item.notes || "No notes yet.")}</p>
           <button class="ghost-button" data-research-id="${item.id}" type="button">Remove</button>
         </article>
-      `,
-        )
+      `;
+        })
         .join("")
     : `<p class="empty-state">No sources yet.</p>`;
+
+  els.researchList.querySelectorAll("[data-open-idea]").forEach((button) => {
+    button.addEventListener("click", () => openInspector(button.dataset.openIdea));
+  });
 
   els.researchList.querySelectorAll("[data-research-id]").forEach((button) => {
     button.addEventListener("click", () => {
       state.research = state.research.filter((item) => item.id !== button.dataset.researchId);
       saveState();
-      renderResearch();
+      render();
     });
   });
 }
