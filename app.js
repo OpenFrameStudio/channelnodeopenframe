@@ -127,6 +127,9 @@ const els = {
   ideaForm: document.querySelector("#ideaForm"),
   newIdea: document.querySelector("#newIdeaButton"),
   cancelIdea: document.querySelector("#cancelIdeaButton"),
+  importButton: document.querySelector("#importButton"),
+  importInput: document.querySelector("#importInput"),
+  importStatus: document.querySelector("#importStatus"),
   exportButton: document.querySelector("#exportButton"),
   channelName: document.querySelector("#channelName"),
   workspaceButton: document.querySelector("#workspaceButton"),
@@ -376,6 +379,12 @@ function bindEvents() {
   els.closeInspector.addEventListener("click", () => {
     els.inspector.classList.remove("open");
   });
+
+  els.importButton.addEventListener("click", () => {
+    els.importInput.click();
+  });
+
+  els.importInput.addEventListener("change", handleImportFile);
 
   els.exportButton.addEventListener("click", exportIdeas);
 
@@ -1514,8 +1523,255 @@ function fitCanvasText(ctx, text, maxWidth) {
   return `${clipped.trim()}...`;
 }
 
+async function handleImportFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setImportStatus("Importing...");
+
+  try {
+    const parsed = parseImportFile(file.name, await file.text());
+    const normalized = normalizeImportedData(parsed);
+
+    if (!normalized.ideas.length && !normalized.research.length) {
+      throw new Error("No ideas or research sources were found in that file.");
+    }
+
+    state.ideas = [...normalized.ideas, ...state.ideas];
+    state.research = [...normalized.research, ...state.research];
+    state.selectedIdeaId = normalized.ideas[0]?.id || state.selectedIdeaId;
+    saveState();
+    render();
+
+    if (normalized.ideas[0]) {
+      openInspector(normalized.ideas[0].id);
+    }
+
+    const ideaText = `${normalized.ideas.length} ${normalized.ideas.length === 1 ? "idea" : "ideas"}`;
+    const sourceText = `${normalized.research.length} ${normalized.research.length === 1 ? "source" : "sources"}`;
+    setImportStatus(`Imported ${ideaText} and ${sourceText}.`, "success");
+  } catch (error) {
+    console.error(error);
+    setImportStatus("Import failed.", "error");
+    window.alert(error.message || "That file could not be imported.");
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function parseImportFile(fileName, text) {
+  const lowerName = fileName.toLowerCase();
+  if (lowerName.endsWith(".csv")) return parseCsvImport(text);
+
+  try {
+    return parseJsonImport(text);
+  } catch (error) {
+    if (lowerName.endsWith(".json")) throw error;
+    return parseCsvImport(text);
+  }
+}
+
+function parseJsonImport(text) {
+  const data = JSON.parse(text);
+  if (Array.isArray(data)) return { ideas: data, research: [] };
+  if (!data || typeof data !== "object") return { ideas: [], research: [] };
+
+  if (Array.isArray(data.workspaces)) {
+    return {
+      ideas: data.workspaces.flatMap((workspace) => (Array.isArray(workspace.ideas) ? workspace.ideas : [])),
+      research: data.workspaces.flatMap((workspace) => (Array.isArray(workspace.research) ? workspace.research : [])),
+    };
+  }
+
+  if (Array.isArray(data.ideas) || Array.isArray(data.research)) {
+    return {
+      ideas: Array.isArray(data.ideas) ? data.ideas : [],
+      research: Array.isArray(data.research) ? data.research : [],
+    };
+  }
+
+  return getImportValue(data, ["title", "idea", "video idea"]) ? { ideas: [data], research: [] } : { ideas: [], research: [] };
+}
+
+function parseCsvImport(text) {
+  const rows = parseCsvRows(text).filter((row) => row.some((cell) => String(cell).trim()));
+  if (rows.length < 2) return { ideas: [], research: [] };
+
+  const headers = rows[0];
+  const records = rows.slice(1).map((row) =>
+    headers.reduce((record, header, index) => {
+      record[header] = row[index] || "";
+      return record;
+    }, {}),
+  );
+
+  return {
+    ideas: records.filter((record) => getImportValue(record, ["title", "idea", "video idea"])),
+    research: records
+      .map((record) => {
+        const ideaTitle = getImportValue(record, ["title", "idea", "video idea"]);
+        const sourceTitle = getImportValue(record, ["source", "source title", "research", "research title", "reference"]);
+        const sourceUrl = getImportValue(record, ["source url", "research url", "reference url", "url", "link"]);
+        const sourceNotes = getImportValue(record, ["source notes", "research notes", "reference notes"]);
+        if (!sourceTitle && !sourceUrl && !sourceNotes) return null;
+        return {
+          title: sourceTitle || sourceUrl || `${ideaTitle || "Imported"} source`,
+          url: sourceUrl,
+          notes: sourceNotes,
+          ideaTitle,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell.trim());
+  rows.push(row);
+  return rows;
+}
+
+function normalizeImportedData(parsed) {
+  const idMap = new Map();
+  const titleMap = new Map(state.ideas.map((idea) => [normalizeImportKey(idea.title), idea.id]));
+  const ideas = parsed.ideas
+    .map((item, index) => normalizeImportedIdea(item, index, idMap, titleMap))
+    .filter(Boolean);
+  const research = parsed.research
+    .map((item) => normalizeImportedResearch(item, idMap, titleMap))
+    .filter(Boolean);
+
+  return { ideas, research };
+}
+
+function normalizeImportedIdea(item, index, idMap, titleMap) {
+  const title = getImportValue(item, ["title", "idea", "video idea", "name"]) || `Imported idea ${index + 1}`;
+  const oldId = getImportValue(item, ["id", "idea id"]);
+  const idea = {
+    id: crypto.randomUUID(),
+    title,
+    format: normalizeImportOption(getImportValue(item, ["format", "type", "content type"]), ["Longform", "Short", "Livestream", "Community"], "Longform"),
+    stage: normalizeImportOption(getImportValue(item, ["stage", "status", "column"]), stages, "Seed"),
+    date: normalizeImportDate(getImportValue(item, ["date", "publish date", "publishDate", "scheduled date"])),
+    hook: getImportValue(item, ["hook", "angle", "promise"]) || "",
+    notes: getImportValue(item, ["notes", "description", "details"]) || "",
+    tags: normalizeImportList(getImportValue(item, ["tags", "tag"])),
+    tasks: normalizeImportTasks(getImportValue(item, ["tasks", "todo", "to do", "task list"])),
+  };
+
+  if (oldId) idMap.set(String(oldId), idea.id);
+  titleMap.set(normalizeImportKey(title), idea.id);
+  return idea;
+}
+
+function normalizeImportedResearch(item, idMap, titleMap) {
+  const title = getImportValue(item, ["title", "source", "source title", "research", "research title", "reference", "name"]);
+  const url = getImportValue(item, ["url", "link", "source url", "research url", "reference url"]) || "";
+  const notes = getImportValue(item, ["notes", "source notes", "research notes", "reference notes", "description"]) || "";
+  if (!title && !url && !notes) return null;
+
+  const rawIdeaId = getImportValue(item, ["ideaId", "idea id", "linked idea id", "related idea id"]);
+  const ideaTitle = getImportValue(item, ["ideaTitle", "idea title", "idea", "related idea", "linked idea"]);
+  const existingIdea = rawIdeaId ? state.ideas.find((idea) => idea.id === rawIdeaId) : null;
+
+  return {
+    id: crypto.randomUUID(),
+    title: title || url || "Imported source",
+    url,
+    notes,
+    ideaId: idMap.get(String(rawIdeaId || "")) || existingIdea?.id || titleMap.get(normalizeImportKey(ideaTitle)) || "",
+  };
+}
+
+function getImportValue(source, names) {
+  if (!source || typeof source !== "object") return "";
+  const entries = Object.entries(source);
+  const keys = names.map(normalizeImportKey);
+  const match = entries.find(([key, value]) => keys.includes(normalizeImportKey(key)) && value !== undefined && value !== null && String(value).trim() !== "");
+  return match ? match[1] : "";
+}
+
+function normalizeImportKey(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeImportOption(value, allowed, fallback) {
+  const normalized = normalizeImportKey(value);
+  return allowed.find((option) => normalizeImportKey(option) === normalized) || fallback;
+}
+
+function normalizeImportList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return splitList(value);
+}
+
+function normalizeImportTasks(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((task) => {
+        if (typeof task === "string") return { text: task.trim(), done: false };
+        const text = getImportValue(task, ["text", "title", "task", "name"]);
+        if (!text) return null;
+        return { text, done: Boolean(task.done || task.completed) };
+      })
+      .filter(Boolean);
+  }
+
+  return splitList(value).map((text) => ({ text, done: false }));
+}
+
+function normalizeImportDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+
+  const slashDate = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (slashDate) {
+    const [, day, month, year] = slashDate;
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    return `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function setImportStatus(message, tone = "") {
+  els.importStatus.textContent = message;
+  els.importStatus.dataset.tone = tone;
+  els.importStatus.hidden = !message;
+}
+
 function exportIdeas() {
-  const blob = new Blob([JSON.stringify({ ideas: state.ideas, research: state.research }, null, 2)], {
+  const blob = new Blob([JSON.stringify({ workspace: activeWorkspace()?.name, exportedAt: new Date().toISOString(), ideas: state.ideas, research: state.research }, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
