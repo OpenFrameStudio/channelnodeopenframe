@@ -660,6 +660,32 @@ textarea:focus {
   font-size: 16px;
 }
 
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.import-status {
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-status[data-tone="success"] {
+  color: #3f5f46;
+}
+
+.import-status[data-tone="error"] {
+  color: #7c453e;
+}
+
 .connection-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
