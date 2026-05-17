@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChannelNode</title>
-    <link rel="stylesheet" href="styles.css?v=connected-1" />
+    <link rel="stylesheet" href="styles.css?v=import-1" />
   </head>
   <body>
     <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -134,7 +134,10 @@
               <option value="Livestream">Livestream</option>
               <option value="Community">Community</option>
             </select>
+            <button class="icon-button" id="importButton" type="button" title="Import CSV or JSON" aria-label="Import CSV or JSON">⇧</button>
             <button class="icon-button" id="exportButton" type="button" title="Export ideas" aria-label="Export ideas">⇩</button>
+            <input class="file-input" id="importInput" type="file" accept=".csv,.json,text/csv,application/json" hidden />
+            <span class="import-status" id="importStatus" role="status" aria-live="polite"></span>
             <button class="primary-button" id="newIdeaButton" type="button">
               <span aria-hidden="true">+</span>
               New idea
@@ -346,6 +349,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=connected-1"></script>
+    <script src="app.js?v=import-1"></script>
   </body>
 </html>
